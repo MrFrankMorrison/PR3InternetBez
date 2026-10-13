@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Авторизація</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f2f4f8;margin:0;padding:20px;color:#222}
+.box{max-width:400px;margin:40px auto;background:#fff;padding:28px;border-radius:12px;box-shadow:0 2px 12px #0002}
+h1{font-size:22px;margin:0 0 16px;text-align:center}
+input,button{width:100%;padding:11px;margin-top:10px;font-size:16px;box-sizing:border-box}
+input{border:1px solid #ccc;border-radius:6px}
+button{background:#2563eb;color:#fff;border:0;border-radius:6px;cursor:pointer}
+button.gray{background:#6b7280;font-size:13px;padding:8px}
+#msg{margin-top:14px;font-weight:bold;text-align:center}
+.ok{color:#15803d}
+.err{color:#b91c1c}
+.hidden{display:none}
+details{margin-top:18px;font-size:13px;color:#555}
+summary{cursor:pointer}
+#log{padding-left:18px}
+.x{text-align:center;font-size:16px;margin:6px 0}
+.calc{margin-top:22px;padding-top:16px;border-top:1px solid #ddd}
+.calc h2{font-size:16px;margin:0 0 4px;text-align:center}
+#res{margin-top:10px;text-align:center;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>Вхід у систему</h1>
+
+<div id="step1">
+<input id="id" placeholder="Ідентифікатор">
+<button id="next">Далі</button>
+</div>
+
+<div id="step2" class="hidden">
+<div class="x">Число x: <b id="x"></b></div>
+<input id="y" type="number" step="any" placeholder="Результат функції y'">
+<button id="login">Увійти</button>
+</div>
+
+<div id="msg"></div>
+
+<div class="calc">
+<h2>Калькулятор y = exp(-a·x)</h2>
+<input id="ca" type="number" step="any" placeholder="a">
+<input id="cx" type="number" step="any" placeholder="x">
+<button id="calcBtn">Обчислити</button>
+<div id="res"></div>
+</div>
+
+<details>
+<summary>Підказка</summary>
+<p>Функція: y' = exp(-a·x), округлити до 4 знаків<br>
+user1: a = 0.5<br>user2: a = 1<br>user3: a = 1.5<br>user4: a = 2<br>
+user5: a = 2.5<br>user6: a = 3<br>user7: a = 3.5<br>user8: a = 4</p>
+</details>
+
+<details open>
+<summary>Реєстраційний журнал</summary>
+<ul id="log"></ul>
+<button class="gray" id="reset">Розблокувати та очистити журнал</button>
+</details>
+</div>
+
+<script>
+const users = {
+  user1: 0.5, user2: 1, user3: 1.5, user4: 2,
+  user5: 2.5, user6: 3, user7: 3.5, user8: 4
+};
+const f = (a, x) => Math.exp(-a * x);
+const maxFails = 3;
+
+let currentId = "";
+let x = 0;
+
+const $ = id => document.getElementById(id);
+
+const getLog = () => JSON.parse(localStorage.getItem("log") || "[]");
+const getFails = () => Number(localStorage.getItem("fails") || 0);
+const isLocked = () => getFails() >= maxFails;
+
+function addLog(text) {
+  const log = getLog();
+  log.push(new Date().toLocaleString() + " — " + text);
+  localStorage.setItem("log", JSON.stringify(log));
+  showLog();
+}
+
+function showLog() {
+  $("log").innerHTML = getLog().map(l => "<li>" + l + "</li>").join("");
+}
+
+function say(text, ok) {
+  $("msg").textContent = text;
+  $("msg").className = ok ? "ok" : "err";
+}
+
+function newX() {
+  x = Number(Math.random().toFixed(3));
+  $("x").textContent = x;
+  $("y").value = "";
+}
+
+function showStep(n) {
+  $("step1").classList.toggle("hidden", n !== 1);
+  $("step2").classList.toggle("hidden", n !== 2);
+}
+
+function fail(reason) {
+  const fails = getFails() + 1;
+  localStorage.setItem("fails", fails);
+  addLog("Невдала спроба: " + reason);
+  if (isLocked()) {
+    say("Заборона на вхід. Систему заблоковано", false);
+    showStep(1);
+  } else {
+    say("Заборона на вхід. Спроб залишилось: " + (maxFails - fails), false);
+  }
+}
+
+$("next").onclick = () => {
+  if (isLocked()) return say("Систему заблоковано", false);
+  currentId = $("id").value.trim();
+  if (!(currentId in users)) return fail("користувач " + (currentId || "—") + " не зареєстрований");
+  say("", true);
+  newX();
+  showStep(2);
+};
+
+$("login").onclick = () => {
+  if (isLocked()) return say("Систему заблоковано", false);
+  const y = f(users[currentId], x);
+  const y1 = Number($("y").value);
+  if ($("y").value !== "" && Math.abs(y - y1) < 0.0001) {
+    localStorage.setItem("fails", 0);
+    addLog("Успішний вхід: " + currentId);
+    say("Дозвіл на вхід. Вітаємо, " + currentId, true);
+    $("id").value = "";
+    showStep(1);
+  } else {
+    fail("невірне y' для " + currentId);
+    if (!isLocked()) newX();
+  }
+};
+
+$("reset").onclick = () => {
+  localStorage.clear();
+  showLog();
+  showStep(1);
+  say("", true);
+};
+
+$("calcBtn").onclick = () => {
+  if ($("ca").value === "" || $("cx").value === "") return $("res").textContent = "Введіть a і x";
+  const r = f(Number($("ca").value), Number($("cx").value));
+  $("res").textContent = "y = " + r.toFixed(4);
+};
+
+showLog();
+if (isLocked()) say("Систему заблоковано", false);
+</script>
+</body>
+</html>
